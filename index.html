@@ -35,17 +35,24 @@
     button { font-size: 18px; padding: 8px 22px; border-radius: 7px; border: none; background: #1976d2; color: #fff; cursor: pointer; transition: background 0.12s; font-family: inherit;}
     button:hover { background: #1565c0;}
     select { font-size: 17px; padding: 7px 13px; border-radius: 7px; border: 1px solid #aaa;}
-    .message { font-size: 20px; color: #d32f2f; margin: 16px 0 8px 0; min-height: 20px;}
     .victory { color: #388e3c; font-size: 28px; margin-top: 20px; font-weight: bold;}
     .legend { margin: 18px auto 10px auto; display: flex; justify-content: center; gap: 20px;}
     .legend-item { display: flex; align-items: center; gap: 5px; font-size: 18px;}
     .legend .sand { width: 22px; height: 22px; font-size: 14px; line-height: 22px; border-width: 1.5px; margin: 0;}
     .rules { font-size: 16px; color: #444; margin: 8px auto 14px auto; max-width: 480px; text-align: left; background: #fffbe5; border-left: 5px solid #ffb300; padding: 9px 15px; border-radius: 6px;}
+    .message-below-tubes {
+      font-size: 20px;
+      color: #d32f2f;
+      min-height: 20px;
+      margin: 8px 0 0 0;
+      text-align: center;
+    }
     @media (max-width: 600px) {
       .tubes-row { gap: 12px; }
       .tube { width: 38px; /* height will be set inline */ }
       .sand { width: 25px; height: 25px; font-size: 12px; line-height: 25px; }
       .tube-number { font-size: 12px; min-width: 14px; padding: 0 4px;}
+      .message-below-tubes { font-size: 14px; }
     }
   </style>
 </head>
@@ -67,8 +74,8 @@
       </select>
       <button id="resetBtn">重置</button>
     </div>
-    <div class="message" id="msgArea"></div>
     <div class="tubes-row" id="tubesRow"></div>
+    <div class="message-below-tubes" id="msgArea"></div>
     <div class="victory" id="victoryArea" style="display:none;"></div>
     <div class="legend" id="legendArea"></div>
   </div>
@@ -174,7 +181,6 @@
 
     // 渲染畫面
     function render() {
-      document.getElementById('msgArea').textContent = message;
       // 管子
       const tubesRow = document.getElementById('tubesRow');
       tubesRow.innerHTML = "";
@@ -212,6 +218,8 @@
         }
         tubesRow.appendChild(tubeDiv);
       }
+      // 下方訊息
+      document.getElementById('msgArea').textContent = message;
       // 勝利
       if (victory) {
         document.getElementById('victoryArea').style.display = '';
