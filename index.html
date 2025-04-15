@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>沙子排序拼圖</title>
+  <style>
+    body { font-family: "Microsoft JhengHei", Arial, sans-serif; background: #f8f8f8; margin: 0; padding: 0; text-align: center;}
+    h1 { color: #333; }
+    .game-container { margin: 30px auto; display: flex; flex-direction: column; align-items: center; }
+    .tubes-row { display: flex; gap: 30px; margin-bottom: 15px; justify-content: center; }
+    .tube {
+      border: 3px solid #ccc;
+      border-radius: 15px;
+      width: 60px;
+      display: flex;
+      flex-direction: column-reverse;
+      justify-content: flex-start;
+      align-items: center;
+      background: #fff;
+      position: relative;
+      cursor: pointer;
+      transition: box-shadow 0.15s, height 0.3s;
+      /* height will be set inline */
+    }
+    .tube.selected { box-shadow: 0 0 0 4px #ff9800; border-color: #ff9800;}
+    .tube.locked { opacity: 0.6; border-color: #888; cursor: not-allowed;}
+    .sand { width: 42px; height: 42px; border-radius: 50%; margin: 6px 0; border: 2px solid #bbb; box-sizing: border-box; font-size: 22px; line-height: 42px; color: #fff; font-weight: bold; transition: transform 0.10s; user-select: none;}
+    .sand.R { background: #e53935; border-color: #b71c1c;}
+    .sand.G { background: #43a047; border-color: #1b5e20;}
+    .sand.B { background: #1e88e5; border-color: #0d47a1;}
+    .sand.Y { background: #fbc02d; border-color: #f9a825; color: #333;}
+    .sand.P { background: #8e24aa; border-color: #4a148c;}
+    .tube-number { position: absolute; top: -28px; left: 50%; transform: translateX(-50%); font-size: 18px; color: #666; font-weight: bold; background: #fff; border-radius: 8px; padding: 2px 7px; border: 1px solid #ccc; z-index: 1; min-width: 24px; text-align: center;}
+    .controls { margin: 20px auto 10px auto; display: flex; justify-content: center; gap: 18px;}
+    button { font-size: 18px; padding: 8px 22px; border-radius: 7px; border: none; background: #1976d2; color: #fff; cursor: pointer; transition: background 0.12s; font-family: inherit;}
+    button:hover { background: #1565c0;}
+    select { font-size: 17px; padding: 7px 13px; border-radius: 7px; border: 1px solid #aaa;}
+    .message { font-size: 20px; color: #d32f2f; margin: 16px 0 8px 0; min-height: 20px;}
+    .victory { color: #388e3c; font-size: 28px; margin-top: 20px; font-weight: bold;}
+    .legend { margin: 18px auto 10px auto; display: flex; justify-content: center; gap: 20px;}
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 18px;}
+    .legend .sand { width: 22px; height: 22px; font-size: 14px; line-height: 22px; border-width: 1.5px; margin: 0;}
+    .rules { font-size: 16px; color: #444; margin: 8px auto 14px auto; max-width: 480px; text-align: left; background: #fffbe5; border-left: 5px solid #ffb300; padding: 9px 15px; border-radius: 6px;}
+    @media (max-width: 600px) {
+      .tubes-row { gap: 12px; }
+      .tube { width: 38px; /* height will be set inline */ }
+      .sand { width: 25px; height: 25px; font-size: 12px; line-height: 25px; }
+      .tube-number { font-size: 12px; min-width: 14px; padding: 0 4px;}
+    }
+  </style>
+</head>
+<body>
+  <h1>沙子排序拼圖</h1>
+  <div class="game-container">
+    <div class="rules">
+      勝利條件：每種顏色各有一管全滿且純色<br>
+      移動規則：<br>
+      1. 只能移動頂部沙子<br>
+      2. 可移動到任何未滿管子<br>
+      3. 滿管且同色才會鎖定，不能再移動
+    </div>
+    <div class="controls">
+      <select id="levelSelect">
+        <option value="0">關卡1（新手）：3色4管3格</option>
+        <option value="1">關卡2（挑戰）：4色5管4格</option>
+        <option value="2">關卡3（地域）：5色6管4格</option>
+      </select>
+      <button id="resetBtn">重置</button>
+    </div>
+    <div class="message" id="msgArea"></div>
+    <div class="tubes-row" id="tubesRow"></div>
+    <div class="victory" id="victoryArea" style="display:none;"></div>
+    <div class="legend" id="legendArea"></div>
+  </div>
+  <script>
+    // 多關卡設定
+    const LEVELS = [
+      { colors: 3, tubes: 4, perTube: 3, colorSymbols: ['R', 'G', 'B'], colorNames: ['紅色','綠色','藍色'] },
+      { colors: 4, tubes: 5, perTube: 4, colorSymbols: ['R', 'G', 'B', 'Y'], colorNames: ['紅色','綠色','藍色','黃色'] },
+      { colors: 5, tubes: 6, perTube: 4, colorSymbols: ['R', 'G', 'B', 'Y', 'P'], colorNames: ['紅色','綠色','藍色','黃色','紫色'] }
+    ];
+    let levelIdx = 0;
+    let NUM_TUBES, MAX_SAND_PER_TUBE, NUM_COLORS, COLOR_SYMBOLS, COLOR_NAMES;
+
+    // 狀態
+    let tubes = [];
+    let selectedTube = null;
+    let message = "";
+    let victory = false;
+
+    function setLevel(idx) {
+      levelIdx = idx;
+      NUM_COLORS = LEVELS[idx].colors;
+      NUM_TUBES = LEVELS[idx].tubes;
+      MAX_SAND_PER_TUBE = LEVELS[idx].perTube;
+      COLOR_SYMBOLS = LEVELS[idx].colorSymbols;
+      COLOR_NAMES = LEVELS[idx].colorNames;
+    }
+
+    function renderLegend() {
+      const legend = document.getElementById('legendArea');
+      legend.innerHTML = '';
+      for (let i = 0; i < COLOR_SYMBOLS.length; ++i) {
+        let item = document.createElement('div');
+        item.className = 'legend-item';
+        let sand = document.createElement('div');
+        sand.className = 'sand ' + COLOR_SYMBOLS[i];
+        item.appendChild(sand);
+        item.appendChild(document.createTextNode(COLOR_NAMES[i]));
+        legend.appendChild(item);
+      }
+    }
+
+    // 初始化遊戲
+    function initGame() {
+      setLevel(levelIdx);
+      // 準備沙子
+      let allSands = [];
+      for (let i = 0; i < NUM_COLORS; ++i) {
+        for (let j = 0; j < MAX_SAND_PER_TUBE; ++j) {
+          allSands.push(i);
+        }
+      }
+      // 洗牌
+      for (let i = allSands.length - 1; i > 0; --i) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allSands[i], allSands[j]] = [allSands[j], allSands[i]];
+      }
+      // 分配到管子
+      tubes = [];
+      for (let i = 0; i < NUM_TUBES; ++i) tubes.push([]);
+      for (let i = 0; i < NUM_COLORS; ++i) {
+        tubes[i] = allSands.slice(i * MAX_SAND_PER_TUBE, (i + 1) * MAX_SAND_PER_TUBE);
+      }
+      // 其餘的管子空
+      for (let i = NUM_COLORS; i < NUM_TUBES; ++i) tubes[i] = [];
+      selectedTube = null;
+      message = "";
+      victory = false;
+      renderLegend();
+      render();
+    }
+
+    function isTubeComplete(tube) {
+      return tube.length === MAX_SAND_PER_TUBE && tube.every(s => s === tube[0]);
+    }
+
+    function isGameComplete() {
+      let complete = 0;
+      let foundColor = Array(NUM_COLORS).fill(false);
+      for (let tube of tubes) {
+        if (isTubeComplete(tube)) {
+          ++complete;
+          foundColor[tube[0]] = true;
+        }
+      }
+      return complete >= NUM_COLORS && foundColor.every(x => x);
+    }
+
+    function isTubeLocked(idx) {
+      let tube = tubes[idx];
+      return tube.length === MAX_SAND_PER_TUBE && tube.every(s => s === tube[0]);
+    }
+
+    function moveSand(from, to) {
+      if (from === to) return [false, "不能移動到同一個管子！"];
+      if (tubes[from].length === 0) return [false, "這個管子是空的！"];
+      if (isTubeLocked(from)) return [false, "這個管子已完成且鎖定，不能移動！"];
+      if (tubes[to].length >= MAX_SAND_PER_TUBE) return [false, "目標管子已滿！"];
+      let sand = tubes[from].pop();
+      tubes[to].push(sand);
+      return [true, "移動成功！"];
+    }
+
+    // 渲染畫面
+    function render() {
+      document.getElementById('msgArea').textContent = message;
+      // 管子
+      const tubesRow = document.getElementById('tubesRow');
+      tubesRow.innerHTML = "";
+
+      // 動態決定單個館子的高度
+      // (每格 54px + 一些邊距)
+      let tubeHeight = 54 * MAX_SAND_PER_TUBE + 18;
+
+      for (let i = 0; i < NUM_TUBES; ++i) {
+        let tubeDiv = document.createElement('div');
+        tubeDiv.className = 'tube';
+        tubeDiv.dataset.index = i;
+        tubeDiv.style.height = tubeHeight + "px";
+        if (selectedTube === i) tubeDiv.classList.add('selected');
+        if (isTubeLocked(i)) tubeDiv.classList.add('locked');
+        // 管子編號
+        let num = document.createElement('div');
+        num.className = 'tube-number';
+        num.textContent = i + 1;
+        tubeDiv.appendChild(num);
+        // 沙子
+        for (let j = 0; j < tubes[i].length; ++j) {
+          let sandDiv = document.createElement('div');
+          let colorIdx = tubes[i][j];
+          sandDiv.className = 'sand ' + COLOR_SYMBOLS[colorIdx];
+          sandDiv.textContent = COLOR_SYMBOLS[colorIdx];
+          tubeDiv.appendChild(sandDiv);
+        }
+        // 補空格
+        for (let j = tubes[i].length; j < MAX_SAND_PER_TUBE; ++j) {
+          let emptyDiv = document.createElement('div');
+          emptyDiv.className = 'sand';
+          emptyDiv.style.opacity = '0';
+          tubeDiv.appendChild(emptyDiv);
+        }
+        tubesRow.appendChild(tubeDiv);
+      }
+      // 勝利
+      if (victory) {
+        document.getElementById('victoryArea').style.display = '';
+        document.getElementById('victoryArea').innerHTML = "🎉 恭喜！你完成了遊戲！<br><button onclick='initGame()'>再玩一次</button>";
+      } else {
+        document.getElementById('victoryArea').style.display = 'none';
+      }
+    }
+
+    // 處理管子點擊
+    document.getElementById('tubesRow').onclick = function(e) {
+      let tubeDiv = e.target.closest('.tube');
+      if (!tubeDiv || victory) return;
+      let idx = parseInt(tubeDiv.dataset.index);
+      if (selectedTube === null) {
+        // 選源管子
+        if (tubes[idx].length === 0) {
+          message = "這個管子是空的！";
+          render();
+          return;
+        }
+        if (isTubeLocked(idx)) {
+          message = "這個管子已完成且鎖定，不能移動！";
+          render();
+          return;
+        }
+        selectedTube = idx;
+        message = "請選擇目標管子";
+        render();
+      } else {
+        // 選目標管子
+        if (selectedTube === idx) {
+          selectedTube = null;
+          message = "";
+          render();
+          return;
+        }
+        let [success, msg] = moveSand(selectedTube, idx);
+        message = msg;
+        selectedTube = null;
+        if (success && isGameComplete()) {
+          victory = true;
+          message = "";
+        }
+        render();
+      }
+    };
+
+    document.getElementById('resetBtn').onclick = function() {
+      initGame();
+    };
+
+    document.getElementById('levelSelect').onchange = function() {
+      setLevel(this.value | 0);
+      initGame();
+    };
+
+    // 初始
+    setLevel(0);
+    initGame();
+  </script>
+</body>
+</html>
